@@ -10,25 +10,31 @@ on:
 
 jobs:
   grype:
-    name: Grype
+    name: Grype Repo Scanner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
         uses: actions/checkout@v4
       - name: Scan current project
         uses: anchore/scan-action@v3
-        id: scan
         with:
           path: "."
-          # fail-build: false
           output-format: table
-      # - name: upload Anchore scan SARIF report
-      #   uses: github/codeql-action/upload-sarif@v3
-      #   with:
-      #     sarif_file: ${{ steps.scan.outputs.sarif }}
+      - name: Scan current project
+        uses: anchore/scan-action@v3
+        if: always()
+        id: scan
+        with:
+          severity-cutoff: high
+          path: "."
+      - name: upload Anchore scan SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: ${{ steps.scan.outputs.sarif }}
 
   grype-image:
-    name: Grype Image
+    name: Grype Image Scanner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -42,7 +48,7 @@ jobs:
           output-format: table
 
   grype-sbom:
-    name: Grype SBOM
+    name: Grype SBOM Scanner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -51,19 +57,20 @@ jobs:
         run: npm install --global @cyclonedx/cyclonedx-npm
       - name: Generate SBOM file
         run: npx @cyclonedx/cyclonedx-npm --output-file sbom.json
-      - name: Upload SBOM artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: sbom
-          path: sbom.json
       - name: Scan SBOM
         uses: anchore/scan-action@v3
         with:
           sbom: "sbom.json"
           output-format: table
-
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: sbom
+          path: sbom.json
+  
   bearer:
-    name: Bearer
+    name: Bearer Scanner
     runs-on: ubuntu-latest
     steps:
       - name: Checkout source code
@@ -71,3 +78,28 @@ jobs:
       - name: Run Report
         id: report
         uses: bearer/bearer-action@v2
+
+  trivy:
+    name: Trivy Scanner
+    runs-on: ubuntu-20.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Build an image from Dockerfile
+        run: docker build . --file Dockerfile --tag localbuild/todo-app:v1
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: localbuild/todo-app:v1
+          format: 'sarif'
+          exit-code: '1'
+          output: 'trivy-results.sarif'
+          ignore-unfixed: true
+          vuln-type: 'os,library'
+          scanners: 'vuln,secret'
+          severity: 'CRITICAL,HIGH'
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
