@@ -1,0 +1,4 @@
+*.env
+!template.env
+payload.json
+bom.json

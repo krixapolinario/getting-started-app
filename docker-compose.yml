@@ -1,8 +1,11 @@
 services:
   todoapp:
     image: todoapp:${BUILD_NUMBER}
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - 3000:3000
+      - '127.0.0.1:3000:3000'
     deploy:
       restart_policy:
         condition: on-failure
@@ -14,5 +17,25 @@ services:
         source: todo-db
         target: /etc/todos
 
+  dtrack-apiserver:
+    image: dependencytrack/apiserver:4.12.0
+    ports:
+      - '127.0.0.1:8081:8080'
+    volumes:
+      - 'dependency-track:/data'
+    restart: unless-stopped
+
+  dtrack-frontend:
+    image: dependencytrack/frontend:4.12.0
+    depends_on:
+      - dtrack-apiserver
+    environment:
+      - API_BASE_URL=http://localhost:8081
+    ports:
+      - '127.0.0.1:8080:8080'
+    restart: unless-stopped
+
 volumes:
   todo-db:
+  dependency-track:
+    name: dtrack
